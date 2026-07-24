@@ -114,7 +114,7 @@ func decodeError(d []byte) (v string,n int,done bool, err error){
 // command has been received over TCP.
 func Decode(d []byte) (v Value,n int, done bool, err error){
 	if len(d)==0{
-		return nil,0,false,errors.New("Empty data")
+		return nil,0,false,nil
 	}
 	
 	switch d[0]{
