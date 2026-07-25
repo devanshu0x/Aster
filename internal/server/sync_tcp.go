@@ -1,3 +1,11 @@
+/*
+DEPRECATED
+
+This synchronous server was used during the initial development phase
+for testing. Aster now uses an asynchronous server based on I/O
+multiplexing.
+*/
+
 package server
 
 import (
