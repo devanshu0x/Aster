@@ -1,12 +1,57 @@
 package server
 
 import (
+	"io"
 	"log"
 	"net"
 	"syscall"
 
 	"github.com/devanshu0x/Aster/internal/config"
+	"github.com/devanshu0x/Aster/internal/resp"
 )
+
+
+type Client struct{
+	FD int
+	Buffer []byte
+}
+
+func readSocket(r FDComm,clients map[int] *Client) error {
+	buf:=make([]byte,512)
+	for{
+		n,err:=r.Read(buf)
+		if err!=nil{
+			if err==syscall.EAGAIN{
+				break
+			}
+			log.Println("Failed to read socket")
+			return err
+		}
+		// n == 0, err == nil → the peer has performed an orderly shutdown (closed the connection).
+		if n==0{
+			return io.EOF
+		}
+
+		client:=clients[r.FD]
+		client.Buffer=append(client.Buffer, buf[:n]...)
+	}
+	return nil
+}
+
+func extractCommand(comm FDComm,clients map[int]*Client) ( cmd resp.Value,done bool, err error){
+	cmd,n,done,err:=resp.Decode(clients[comm.FD].Buffer)
+	if err!=nil{
+		return nil,false,err
+	}
+	if !done{
+		return nil,false,nil
+	}
+
+	clients[comm.FD].Buffer=clients[comm.FD].Buffer[n:]
+
+	return cmd,true,nil
+
+}
 
 // Asynchronous TCP server (IO Multiplexing)
 
@@ -14,6 +59,8 @@ var con_clients int =0
 
 func RunAsyncTCPServer() error{
 	log.Printf("Starting TCP server on %s:%d\n",config.HOST,config.PORT)
+
+	clients:= map[int] *Client{}
 	
 	// This is not the maximum number of clients server can actually support
 	// This is simply the maximum number of events epoll_wait() can return in a single call
@@ -87,6 +134,9 @@ func RunAsyncTCPServer() error{
 					continue
 				}
 
+				clients[fd] = &Client{
+    				FD: fd,
+				}
 				con_clients++
 				syscall.SetNonblock(fd,true)
 
@@ -101,14 +151,42 @@ func RunAsyncTCPServer() error{
 
 			}else{
 				comm:= FDComm{FD: int(events[i].Fd)}
-				cmd,err:=readCommand(comm)
+				// cmd,err:=readCommand(comm)
+				// if err!=nil{
+				// 	syscall.Close(int(events[i].Fd))
+				// 	con_clients--
+				// 	continue
+				// }
+
+				// respond(cmd,comm)
+				if err:=readSocket(comm,clients);err!=nil{
+					if err==io.EOF{
+						// closing the fd gracefully
+						if err:=syscall.EpollCtl(epollFD,syscall.EPOLL_CTL_DEL,comm.FD,nil); err!=nil{
+							return err
+						}
+						if err:=syscall.Close(comm.FD);err!=nil{
+							return err
+						}
+						delete(clients,comm.FD)
+						con_clients--
+						log.Printf("Client %d disconnected (%d clients connected)", comm.FD, con_clients)
+						continue
+					}
+					return err
+				}
+
+				cmd,done,err:=extractCommand(comm,clients)
 				if err!=nil{
-					syscall.Close(int(events[i].Fd))
-					con_clients--
+					log.Println("Error while extracting command: ",err)
+					continue
+				}
+				if !done{
 					continue
 				}
 
-				respond(cmd,comm)
+				log.Println(cmd)
+
 			}
 		}
 	}
