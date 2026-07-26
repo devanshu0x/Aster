@@ -176,16 +176,18 @@ func RunAsyncTCPServer() error{
 					return err
 				}
 
-				cmd,done,err:=extractCommand(comm,clients)
+				for{
+					cmd,done,err:=extractCommand(comm,clients)
 				if err!=nil{
 					log.Println("Error while extracting command: ",err)
-					continue
+					break
 				}
 				if !done{
-					continue
+					break
 				}
 
 				log.Println(cmd)
+				}
 
 			}
 		}
