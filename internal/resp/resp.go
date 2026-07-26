@@ -16,78 +16,104 @@ import (
 	"errors"
 	"strconv"
 )
-type Value interface{}
+type RESPType string
 
+const(
+	RESPSimpleString RESPType = "simple_string"
+	RESPBulkString RESPType="bulk_string"
+	RESPError RESPType="error"
+	RESPInteger RESPType="integer"
+	RESPArray RESPType= "array"
+)
 
-func decodeSimpleString(d []byte)(v string,n int,done bool, err error){
-	idx:=bytes.Index(d,[]byte("\r\n"))
-	if idx==-1{
-		return "",0,false,nil
-	}
-	return string(d[:idx]),idx+2,true,nil
+type RESPValue struct{
+	Type RESPType
+	Value interface{}
 }
 
-func decodeInt(d []byte)(v,n int,done bool, err error){
+
+func decodeSimpleString(d []byte)(v *RESPValue,n int,done bool, err error){
 	idx:=bytes.Index(d,[]byte("\r\n"))
 	if idx==-1{
-		return 0,0,false,nil
+		return nil,0,false,nil
 	}
-	v,err=strconv.Atoi(string(d[:idx]))
+	return &RESPValue{
+		Type: RESPSimpleString,
+		Value: string(d[:idx]),
+	},idx+2,true,nil
+}
+
+func decodeInt(d []byte)(v *RESPValue,n int,done bool, err error){
+	idx:=bytes.Index(d,[]byte("\r\n"))
+	if idx==-1{
+		return nil,0,false,nil
+	}
+	val,err:=strconv.Atoi(string(d[:idx]))
 	if err!=nil{
-		return 0,0,false,err
+		return nil,0,false,err
 	}
 
-	return v,idx+2,true,nil
+	return &RESPValue{
+		Type: RESPInteger,
+		Value: val,
+	},idx+2,true,nil
 }
 
-func decodeBulkString(d []byte)(v Value,n int,done bool, err error){
+func decodeBulkString(d []byte)(v *RESPValue,n int,done bool, err error){
 	strLen,n,done,err:=decodeInt(d)
-	if !done || err!=nil{
-		return "",0,done,err
-	}
-
-	// strLen==-1 is null bulk string : $-1\r\n
-	if strLen==-1{
-		return nil,n,true,nil
-		// wait what should i return in case of null bulk string? Maybe nil for now
-	} 
-	// -ve length bulk string is not allowed
-	if strLen < -1{
-		return "",0,false,errors.New("negative bulk string length")
-	}
-
-	// byte stream is not complete for parsing
-	if strLen+n+2>len(d){
-		return "",0,false,nil
-	}
-
-	if !bytes.HasPrefix(d[n+strLen:],[]byte("\r\n")) {
-		return "",0,false, errors.New("Bulk string not correctly encoded")
-	}
-
-	return string(d[n:n+strLen]),n+strLen+2,true,nil
-
-}
-
-func decodeArray(d []byte)(v Value,n int,done bool, err error){
-	arrLen,n,done,err:=decodeInt(d)
 	if !done || err!=nil{
 		return nil,0,done,err
 	}
 
+	// assert strlen value is int 
+	length:= strLen.Value.(int)
+
+	// strLen==-1 is null bulk string : $-1\r\n
+	if length==-1{
+		return nil,n,true,nil
+		// wait what should i return in case of null bulk string? Maybe nil for now
+	} 
+	// -ve length bulk string is not allowed
+	if length < -1{
+		return nil,0,false,errors.New("negative bulk string length")
+	}
+
+	// byte stream is not complete for parsing
+	if length+n+2>len(d){
+		return nil,0,false,nil
+	}
+
+	if !bytes.HasPrefix(d[n+length:],[]byte("\r\n")) {
+		return nil,0,false, errors.New("Bulk string not correctly encoded")
+	}
+
+	return &RESPValue{
+		Type: RESPBulkString,
+		Value: string(d[n:n+length]),
+	},n+length+2,true,nil
+
+}
+
+func decodeArray(d []byte)(v *RESPValue,n int,done bool, err error){
+	arrLen,n,done,err:=decodeInt(d)
+	if !done || err!=nil{
+		return nil,0,done,err
+	}
+	// assert length to be int
+	length:=arrLen.Value.(int)
 	// null array
-	if arrLen==-1{
+	if length== -1{
 		return nil,n,true,nil
 	}
 
 	// reject -ve length array
-	if arrLen < -1{
+	if length < -1{
 		return nil,0,false,errors.New("negative array length")
 	}
 
-	arr:=make([]Value,arrLen)
+	arr:=make([]*RESPValue,length)
 	
-	for i:= range arrLen{
+	for i:= range length{
 		val,bytesR,done,err:=Decode(d[n:])
 		if !done || err!=nil{
 			return nil,0,done,err
@@ -96,15 +122,21 @@ func decodeArray(d []byte)(v Value,n int,done bool, err error){
 		arr[i]=val
 	}
 
-	return arr,n,true,nil
+	return &RESPValue{
+		Type: RESPArray,
+		Value: arr,
+	},n,true,nil
 }
 
-func decodeError(d []byte) (v string,n int,done bool, err error){
+func decodeError(d []byte) (v *RESPValue,n int,done bool, err error){
 	idx:=bytes.Index(d,[]byte("\r\n"))
 	if idx==-1{
-		return "",0,false,nil
+		return nil,0,false,nil
 	}
-	return string(d[:idx]),idx+2,true,nil
+	return &RESPValue{
+		Type: RESPError,
+		Value: string(d[:idx]),
+	},idx+2,true,nil
 }
 
 
@@ -112,7 +144,7 @@ func decodeError(d []byte) (v string,n int,done bool, err error){
 // Redis client requests are always encoded as RESP arrays.
 // Aster uses this property to determine whether a complete
 // command has been received over TCP.
-func Decode(d []byte) (v Value,n int, done bool, err error){
+func Decode(d []byte) (v *RESPValue,n int, done bool, err error){
 	if len(d)==0{
 		return nil,0,false,nil
 	}

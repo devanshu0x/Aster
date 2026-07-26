@@ -37,7 +37,7 @@ func readSocket(r FDComm, clients map[int]*Client) error {
 	return nil
 }
 
-func extractCommand(comm FDComm, clients map[int]*Client) (cmd resp.Value, done bool, err error) {
+func extractCommand(comm FDComm, clients map[int]*Client) (cmd *resp.RESPValue, done bool, err error) {
 	cmd, n, done, err := resp.Decode(clients[comm.FD].Buffer)
 	if err != nil {
 		return nil, false, err
