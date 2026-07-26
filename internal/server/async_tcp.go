@@ -175,7 +175,7 @@ func RunAsyncTCPServer() error {
 						}
 						delete(clients, comm.FD)
 						con_clients--
-						log.Printf("Client %d disconnected (%d clients connected)", comm.FD, con_clients)
+						log.Printf("Client disconnected (%d clients connected)", con_clients)
 						continue
 					}
 					return err
@@ -191,7 +191,7 @@ func RunAsyncTCPServer() error {
 						break
 					}
 
-					log.Println(cmd)
+					log.Printf("Type: %v, Value: %v\n",cmd.Type,cmd.Value)
 				}
 
 			}
