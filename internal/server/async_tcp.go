@@ -6,13 +6,15 @@ import (
 	"net"
 	"syscall"
 
+	"github.com/devanshu0x/Aster/internal/command"
 	"github.com/devanshu0x/Aster/internal/config"
 	"github.com/devanshu0x/Aster/internal/resp"
 )
 
 type Client struct {
-	FD     int
-	Buffer []byte
+	FD          int
+	ReadBuffer  []byte
+	WriteBuffer []byte
 }
 
 func readSocket(r FDComm, clients map[int]*Client) error {
@@ -32,13 +34,39 @@ func readSocket(r FDComm, clients map[int]*Client) error {
 		}
 
 		client := clients[r.FD]
-		client.Buffer = append(client.Buffer, buf[:n]...)
+		client.ReadBuffer = append(client.ReadBuffer, buf[:n]...)
 	}
 	return nil
 }
 
+func writeSocket(w FDComm, clients map[int]*Client) error {
+	client := clients[w.FD]
+	if len(client.WriteBuffer) == 0 {
+		return nil
+	}
+
+	for len(client.WriteBuffer) != 0 {
+		writeN, err := w.Write(client.WriteBuffer)
+		if err != nil {
+			switch err {
+			case syscall.EAGAIN:
+				return nil
+
+			case syscall.EPIPE, syscall.ECONNRESET:
+				return io.EOF
+
+			default:
+				return err
+			}
+		}
+		client.WriteBuffer = client.WriteBuffer[writeN:]
+	}
+
+	return nil
+}
+
 func extractCommand(comm FDComm, clients map[int]*Client) (cmd *resp.RESPValue, done bool, err error) {
-	cmd, n, done, err := resp.Decode(clients[comm.FD].Buffer)
+	cmd, n, done, err := resp.Decode(clients[comm.FD].ReadBuffer)
 	if err != nil {
 		return nil, false, err
 	}
@@ -46,7 +74,7 @@ func extractCommand(comm FDComm, clients map[int]*Client) (cmd *resp.RESPValue, 
 		return nil, false, nil
 	}
 
-	clients[comm.FD].Buffer = clients[comm.FD].Buffer[n:]
+	clients[comm.FD].ReadBuffer = clients[comm.FD].ReadBuffer[n:]
 
 	return cmd, true, nil
 
@@ -191,7 +219,31 @@ func RunAsyncTCPServer() error {
 						break
 					}
 
-					log.Printf("Type: %v, Value: %v\n",cmd.Type,cmd.Value)
+					respVal := command.Dispatch(cmd)
+
+					encoding, err := resp.Encode(respVal)
+					if err != nil {
+						return err
+					}
+					clients[comm.FD].WriteBuffer = append(clients[comm.FD].WriteBuffer, encoding...)
+
+					if err := writeSocket(comm, clients); err != nil {
+						if err == io.EOF {
+							// closing the fd gracefully
+							if err := syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_DEL, comm.FD, nil); err != nil {
+								return err
+							}
+							if err := syscall.Close(comm.FD); err != nil {
+								return err
+							}
+							delete(clients, comm.FD)
+							con_clients--
+							log.Printf("Client disconnected (%d clients connected)", con_clients)
+							break
+						}
+						return err
+					}
+
 				}
 
 			}

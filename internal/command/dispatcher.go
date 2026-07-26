@@ -13,7 +13,7 @@ func RESPError(msg string) (*resp.RESPValue){
 	}
 }
 
-func Dispatcher(v *resp.RESPValue)(*resp.RESPValue){
+func Dispatch(v *resp.RESPValue)(*resp.RESPValue){
 	if v==nil{
 		return RESPError("NIL pointer wtf!")
 	}

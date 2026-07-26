@@ -27,7 +27,7 @@ func encodeBulkString(v *RESPValue) ([]byte,error){
 		return nil,errors.New("Invalid encoding type")
 	}
 	if v.Value==nil{
-		return []byte(fmt.Sprintf("$-1\r\n")),nil
+		return []byte("$-1\r\n"),nil
 	}
 	val,ok:=v.Value.(string)
 	if !ok{
@@ -42,7 +42,7 @@ func encodeArray(v *RESPValue) ([]byte,error){
 		return nil,errors.New("Invalid encoding type")
 	}
 	if v.Value==nil{
-		return []byte(fmt.Sprintf("*-1\r\n")),nil
+		return []byte("*-1\r\n"),nil
 	}
 
 	arr,ok:=v.Value.([]*RESPValue)

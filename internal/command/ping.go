@@ -9,7 +9,7 @@ func cmdPing(argArr []*resp.RESPValue) *resp.RESPValue{
 	if len(argArr)==1{
 		return &resp.RESPValue{
 			Type: resp.RESPBulkString,
-			Value: argArr[0],
+			Value: argArr[0].Value,
 		}
 	}
 

@@ -18,5 +18,6 @@ func setupFlags(){
 func main(){
 	setupFlags()
 	log.Println("Aster is starting...")
-	server.RunAsyncTCPServer()
+	err:=server.RunAsyncTCPServer()
+	log.Fatalln("Error closing server: ",err)
 }
