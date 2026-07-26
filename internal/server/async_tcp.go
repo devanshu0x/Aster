@@ -128,10 +128,15 @@ func RunAsyncTCPServer() error{
 			// if the server socket itself is ready for an IO
 			if events[i].Fd==int32(serverFD){
 				// accept incoming connection from a client
+				// read all incoming connections
+				for{
 				fd,_,err:= syscall.Accept(serverFD)
 				if err!=nil{
+					if err==syscall.EAGAIN{
+						break 
+					}
 					log.Println("Error: ",err)
-					continue
+					break
 				}
 
 				clients[fd] = &Client{
@@ -147,6 +152,7 @@ func RunAsyncTCPServer() error{
 				}
 				if err:=syscall.EpollCtl(epollFD,syscall.EPOLL_CTL_ADD,fd, &clientSocketEvent);err!=nil{
 					return err
+				}
 				}
 
 			}else{
