@@ -50,6 +50,10 @@ func Dispatch(v *resp.RESPValue)(*resp.RESPValue){
 		return cmdGET(arr[1:])	
 	case "TTL":		
 		return cmdTTL(arr[1:])
+	case "EXPIRE":
+		return cmdEXPIRE(arr[1:])
+	case "DEL":
+		return cmdDEL(arr[1:])		
 	default:
 		return RESPError("Unregisted command")	
 	}
