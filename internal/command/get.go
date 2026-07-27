@@ -26,7 +26,7 @@ func cmdGET(argArr []*resp.RESPValue) *resp.RESPValue {
 		}
 	}
 
-	if  valObj.ExpiresAt!=-1 && valObj.ExpiresAt<=time.Now().Unix(){
+	if  valObj.ExpiresAt!=-1 && valObj.ExpiresAt<=time.Now().UnixMilli(){
 		return &resp.RESPValue{
 			Type: resp.RESPBulkString,
 			Value: nil,
