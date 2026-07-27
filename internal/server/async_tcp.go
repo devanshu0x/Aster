@@ -5,10 +5,12 @@ import (
 	"log"
 	"net"
 	"syscall"
+	"time"
 
 	"github.com/devanshu0x/Aster/internal/command"
 	"github.com/devanshu0x/Aster/internal/config"
 	"github.com/devanshu0x/Aster/internal/resp"
+	"github.com/devanshu0x/Aster/internal/store"
 )
 
 type Client struct {
@@ -83,6 +85,8 @@ func extractCommand(comm FDComm, clients map[int]*Client) (cmd *resp.RESPValue, 
 // Asynchronous TCP server (IO Multiplexing)
 
 var con_clients int = 0
+var cronFrequency time.Duration= 1*time.Second
+var lastCronExecTime time.Time= time.Now()
 
 func RunAsyncTCPServer() error {
 	log.Printf("Starting TCP server on %s:%d\n", config.HOST, config.PORT)
@@ -143,15 +147,26 @@ func RunAsyncTCPServer() error {
 	if err = syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_ADD, serverFD, &serverSocketEvent); err != nil {
 		return err
 	}
-
+	// event loop
 	for {
-		nevents, err := syscall.EpollWait(epollFD, events, -1)
+		timeout:=int(time.Until(lastCronExecTime.Add(cronFrequency)).Milliseconds())
+		if timeout<0{
+			timeout=0
+		}
+
+		nevents, err := syscall.EpollWait(epollFD, events, timeout)
 		if err != nil {
 			log.Println("Error: ", err)
 			continue
 		}
 
-		for i := range nevents {
+		// active deletion of expired keys
+		if time.Now().After(lastCronExecTime.Add(cronFrequency)){
+			store.DeleteExpiredKeys()
+			lastCronExecTime= time.Now()
+		}
+
+		for i:=0;i<nevents;i++ {
 			// if the server socket itself is ready for an IO
 			if events[i].Fd == int32(serverFD) {
 				// accept incoming connection from a client

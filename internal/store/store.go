@@ -46,7 +46,7 @@ func Get(k string) *Obj{
 	if !ok{
 		return nil
 	}
-	if obj.ExpiresAt<=time.Now().UnixMilli(){
+	if obj.ExpiresAt!=-1 && obj.ExpiresAt<=time.Now().UnixMilli(){
 		delete(store,k)
 		return nil
 	}
@@ -75,6 +75,7 @@ func Expire(k string, expInMilli int64) bool{
 
 	obj:=store[k]
 	if obj.ExpiresAt!=-1 && obj.ExpiresAt<=time.Now().UnixMilli(){
+		delete(store,k)
 		return false
 	}
 
