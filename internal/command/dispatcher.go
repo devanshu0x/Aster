@@ -43,7 +43,13 @@ func Dispatch(v *resp.RESPValue)(*resp.RESPValue){
 
 	switch cmd{
 	case "PING":
-		return cmdPing(arr[1:])
+		return cmdPING(arr[1:])
+	case "SET":
+		return cmdSET(arr[1:])
+	case "GET":
+		return cmdGET(arr[1:])	
+	case "TTL":		
+		return cmdTTL(arr[1:])
 	default:
 		return RESPError("Unregisted command")	
 	}
