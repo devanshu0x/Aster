@@ -7,14 +7,6 @@ import (
 	"github.com/devanshu0x/Aster/internal/config"
 )
 
-type HashTable struct {
-	buckets []*Entry
-	used    int
-}
-
-var store *HashTable
-var LRUClock uint32
-
 type ObjType string
 
 const (
@@ -36,6 +28,19 @@ type Obj struct {
 	LRUClock  uint32
 }
 
+type HashTable struct {
+	buckets []*Entry
+	used    int
+}
+
+type Dict struct {
+	ht        [2]*HashTable
+	rehashIdx int
+}
+
+var store *Dict
+var LRUClock uint32
+
 func NewHashTable(s int) *HashTable {
 	return &HashTable{
 		buckets: make([]*Entry, s),
@@ -43,12 +48,21 @@ func NewHashTable(s int) *HashTable {
 }
 
 func touch(o *Obj) {
+	if o == nil {
+		return
+	}
 	LRUClock++
 	o.LRUClock = LRUClock
 }
 
 func init() {
-	store = NewHashTable(config.HASH_TABLE_SIZE)
+	store = &Dict{
+		ht: [2]*HashTable{
+			NewHashTable(config.HASH_TABLE_SIZE),
+			nil,
+		},
+		rehashIdx: -1,
+	}
 }
 
 func NewObject(value interface{}, durationMs int64, objType ObjType) *Obj {
@@ -75,118 +89,228 @@ func (ht *HashTable) bucketIndex(key string) int {
 	return int(hashSum % uint64(len(ht.buckets)))
 }
 
-func Put(k string, obj *Obj) {
-	idx := store.bucketIndex(k)
-	curr := store.buckets[idx]
+func (ht *HashTable) insertEntry(entry *Entry) {
+	idx := ht.bucketIndex(entry.Key)
+	curr := ht.buckets[idx]
+	for curr != nil && curr.Key != entry.Key {
+		curr = curr.Next
+	}
+
+	if curr != nil {
+		curr.Obj = entry.Obj
+	} else {
+		ht.used++
+		entry.Next = ht.buckets[idx]
+		ht.buckets[idx] = entry
+	}
+}
+
+func (ht *HashTable) findObj(k string) *Obj {
+	idx := ht.bucketIndex(k)
+	curr := ht.buckets[idx]
 	for curr != nil && curr.Key != k {
 		curr = curr.Next
 	}
-	
-	touch(obj)
 
-	if curr != nil {
-		curr.Obj = obj
-	} else {
-		if store.used >= config.MAX_KEYS {
-			// TODO: handle used decrement here only
-		    AllKeysLRUEviction()
-	    }
-		store.used++
-		curr=store.buckets[idx]
-		store.buckets[idx]=&Entry{
-			Key: k,
-			Obj: obj,
-			Next: curr,
-		}
+	if curr == nil {
+		return nil
 	}
-	
+
+	return curr.Obj
 }
 
-func Get(k string) *Obj {
-	idx := store.bucketIndex(k)
+func (ht *HashTable) retrieveObj(k string) *Obj {
+	obj := ht.findObj(k)
+	if obj == nil {
+		return nil
+	}
+	if obj.ExpiresAt != -1 && obj.ExpiresAt <= time.Now().UnixMilli() {
+		ht.deleteEntry(k)
+		return nil
+	}
+	return obj
+}
+
+func (ht *HashTable) deleteEntry(k string) bool {
+	idx := ht.bucketIndex(k)
+	curr := ht.buckets[idx]
 	var prev *Entry
-	curr := store.buckets[idx]
 	for curr != nil && curr.Key != k {
 		prev = curr
 		curr = curr.Next
 	}
+
 	if curr == nil {
-		return nil
+		return false
 	}
+
 	obj := curr.Obj
-	if obj.ExpiresAt != -1 && obj.ExpiresAt <= time.Now().UnixMilli() {
-		store.used--
-		if prev == nil {
-			store.buckets[idx] = curr.Next
-		} else {
-			prev.Next = curr.Next
-		}
+
+	if prev == nil {
+		ht.buckets[idx] = curr.Next
+	} else {
+		prev.Next = curr.Next
 		curr.Next = nil
-		return nil
+	}
+	ht.used--
+
+	if obj.ExpiresAt != -1 && obj.ExpiresAt <= time.Now().UnixMilli() {
+		return false
+	}
+
+	return true
+}
+
+func (d *Dict) loadFactor() float64 {
+	return float64(d.ht[0].used) / float64(len(d.ht[0].buckets))
+}
+
+func (d *Dict) shouldShrink() bool {
+	if d.loadFactor() <= 0.05 && len(d.ht[0].buckets)/2 >= config.HASH_TABLE_SIZE {
+		return true
+	}
+	return false
+}
+
+func (d *Dict) shouldExpand() bool {
+	if d.loadFactor() > 1 {
+		return true
+	}
+	return false
+}
+
+func (d *Dict) startRehash(newSize int) {
+	if d.rehashIdx != -1 {
+		return
+	}
+	d.rehashIdx = 0
+	d.ht[1] = NewHashTable(newSize)
+}
+
+func (d *Dict) isRehashing() bool {
+	return d.rehashIdx != -1
+}
+
+func (d *Dict) rehashStep() {
+	if !d.isRehashing() {
+		return
+	}
+
+	curr := d.ht[0].buckets[d.rehashIdx]
+
+	for curr != nil {
+		next := curr.Next
+		d.ht[1].insertEntry(curr)
+		d.ht[0].used--
+		curr = next
+	}
+	d.ht[0].buckets[d.rehashIdx] = nil
+	d.rehashIdx++
+	if d.rehashIdx == len(d.ht[0].buckets) {
+		d.rehashIdx = -1
+		d.ht[0] = d.ht[1]
+		d.ht[1] = nil
+	}
+}
+
+func Put(k string, obj *Obj) {
+	if store.shouldExpand() {
+		store.startRehash(len(store.ht[0].buckets) * 2)
 	}
 
 	touch(obj)
+	if store.isRehashing() {
+		store.rehashStep()
 
-	return obj
-}
+		// check if key already exists in old hash table
+		oldObj := store.ht[0].findObj(k)
+		if oldObj != nil {
+			// just update the key
+			*oldObj = *obj
 
-func Del(k string) bool{
-	idx:=store.bucketIndex(k)
-	curr:=store.buckets[idx]
-	var prev *Entry
-	for curr!=nil && curr.Key!=k{
-		prev=curr
-		curr=curr.Next
-	}
-	if curr==nil{
-		return false
-	}
-	obj:=curr.Obj
-	store.used--
-	if prev==nil{
-		store.buckets[idx]=curr.Next
-		curr.Next=nil
-	}else{
-		prev.Next=curr.Next
-		curr.Next=nil
-	}
-	if obj.ExpiresAt!=-1 && obj.ExpiresAt<=time.Now().UnixMilli(){
-		return false
-	}
-
-	return true
-}
-
-func Expire(k string, expInMilli int64) bool{
-	idx:=store.bucketIndex(k)
-	var prev *Entry
-	curr:=store.buckets[idx]
-	
-	for curr!=nil && curr.Key!=k{
-		prev=curr
-		curr=curr.Next
-	}
-
-	if curr==nil{
-		return false
-	}
-	obj:=curr.Obj
-	now:=time.Now().UnixMilli()
-	if obj.ExpiresAt!=-1 && obj.ExpiresAt<=now{
-		store.used--
-		if prev==nil{
-			store.buckets[idx]=curr.Next
-			curr.Next=nil
-		}else{
-			prev.Next=curr.Next
-			curr.Next=nil
 		}
-		return false
+		store.ht[1].insertEntry(&Entry{
+			Key: k,
+			Obj: obj,
+		})
+
+	} else {
+		store.ht[0].insertEntry(&Entry{
+			Key: k,
+			Obj: obj,
+		})
 	}
 
-	expTime:=now+expInMilli
+}
 
-	obj.ExpiresAt=expTime
+func Get(k string) *Obj {
 
-	return true
+	if store.isRehashing() {
+		store.rehashStep()
+		if obj := store.ht[0].retrieveObj(k); obj != nil {
+			touch(obj)
+			return obj
+		}
+		obj := store.ht[1].retrieveObj(k)
+		touch(obj)
+		return obj
+	} else {
+		obj := store.ht[0].retrieveObj(k)
+		touch(obj)
+		return obj
+	}
+}
+
+func Del(k string) bool {
+	if store.shouldShrink() {
+		store.startRehash(len(store.ht[0].buckets) / 2)
+	}
+
+	if store.isRehashing() {
+		store.rehashStep()
+		return (store.ht[0].deleteEntry(k) || store.ht[1].deleteEntry(k))
+	} else {
+		return store.ht[0].deleteEntry(k)
+	}
+}
+
+func Expire(k string, expInMilli int64) bool {
+	now := time.Now().UnixMilli()
+	expTime := now + expInMilli
+	if store.isRehashing() {
+		store.rehashStep()
+		obj := store.ht[0].findObj(k)
+		obj2 := store.ht[1].findObj(k)
+		if obj == nil && obj2 == nil {
+			return false
+		}
+		if obj != nil && obj.ExpiresAt != -1 && obj.ExpiresAt <= now {
+			Del(k)
+			return false
+		}
+		if obj2 != nil && obj2.ExpiresAt != -1 && obj2.ExpiresAt <= now {
+			Del(k)
+			return false
+		}
+
+		if obj != nil {
+			obj.ExpiresAt = expTime
+		}
+
+		if obj2 != nil {
+			obj2.ExpiresAt = expTime
+		}
+
+		return true
+
+	} else {
+		obj := store.ht[0].findObj(k)
+		if obj == nil {
+			return false
+		}
+
+		obj.ExpiresAt = expTime
+
+		return true
+	}
 }
