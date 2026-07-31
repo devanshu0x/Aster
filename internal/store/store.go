@@ -89,6 +89,7 @@ func (ht *HashTable) bucketIndex(key string) int {
 	return int(hashSum % uint64(len(ht.buckets)))
 }
 
+// handles both insertion and updating
 func (ht *HashTable) insertEntry(entry *Entry) {
 	idx := ht.bucketIndex(entry.Key)
 	curr := ht.buckets[idx]
@@ -221,14 +222,7 @@ func Put(k string, obj *Obj) {
 	touch(obj)
 	if store.isRehashing() {
 		store.rehashStep()
-
-		// check if key already exists in old hash table
-		oldObj := store.ht[0].findObj(k)
-		if oldObj != nil {
-			// just update the key
-			*oldObj = *obj
-
-		}
+		store.ht[0].deleteEntry(k)
 		store.ht[1].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
