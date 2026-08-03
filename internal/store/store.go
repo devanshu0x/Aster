@@ -2,6 +2,7 @@ package store
 
 import (
 	"hash/fnv"
+	"log"
 	"time"
 
 	"github.com/devanshu0x/Aster/internal/config"
@@ -167,7 +168,7 @@ func (d *Dict) loadFactor() float64 {
 }
 
 func (d *Dict) shouldShrink() bool {
-	if d.loadFactor() <= 0.05 && len(d.ht[0].buckets)/2 >= config.HASH_TABLE_SIZE {
+	if d.loadFactor() <= 0.25 && len(d.ht[0].buckets)/2 >= config.HASH_TABLE_SIZE {
 		return true
 	}
 	return false
@@ -184,6 +185,7 @@ func (d *Dict) startRehash(newSize int) {
 	if d.rehashIdx != -1 {
 		return
 	}
+	log.Println("Started Rehashing to size: ",newSize)
 	d.rehashIdx = 0
 	d.ht[1] = NewHashTable(newSize)
 }
@@ -222,11 +224,20 @@ func Put(k string, obj *Obj) {
 	touch(obj)
 	if store.isRehashing() {
 		store.rehashStep()
-		store.ht[0].deleteEntry(k)
-		store.ht[1].insertEntry(&Entry{
+		// rehash step might finish hashing so it may give nil pointer
+		//derefrence errror when using store.ht[1]
+		if store.isRehashing(){
+			store.ht[0].deleteEntry(k)
+			store.ht[1].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
 		})
+		}else{
+			store.ht[0].insertEntry(&Entry{
+			Key: k,
+			Obj: obj,
+		})
+		}
 
 	} else {
 		store.ht[0].insertEntry(&Entry{
