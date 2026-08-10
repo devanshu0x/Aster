@@ -14,3 +14,9 @@ func (f FDComm) Write(b []byte) (int, error){
 func (f FDComm) Read(b []byte) (int, error){
 	return syscall.Read(f.FD,b)
 }
+
+type Client struct {
+	FD          int
+	ReadBuffer  []byte
+	WriteBuffer []byte
+}
