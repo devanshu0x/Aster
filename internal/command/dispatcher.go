@@ -53,7 +53,9 @@ func Dispatch(v *resp.RESPValue)(*resp.RESPValue){
 	case "EXPIRE":
 		return cmdEXPIRE(arr[1:])
 	case "DEL":
-		return cmdDEL(arr[1:])		
+		return cmdDEL(arr[1:])	
+	case "SAVE":
+		return cmdSAVE()		
 	default:
 		return RESPError("Unregisted command")	
 	}

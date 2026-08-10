@@ -43,14 +43,19 @@ func DeleteExpiredKeys(){
 	if store.isRehashing(){
 		return
 	}
+	deleted:=false
 	for{
 		// if the sample had less than 25% keys expired
 		frac:=expireSample()
-
+		if frac!=0{
+			deleted=true
+		}
 		if frac<0.25{
 			break
 		}
 	}
 
-	log.Println("Deleted expired but undeleted keys. Total keys left: ",store.ht[0].used)
+	if deleted{
+		log.Println("Deleted expired but undeleted keys. Total keys left: ",store.ht[0].used)
+	}
 }

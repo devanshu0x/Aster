@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"github.com/devanshu0x/Aster/internal/config"
+)
 
 type SnapshotEntry struct {
 	Key       string
@@ -65,4 +69,29 @@ func SnapshotStore() Snapshot {
     }
 
     return snapshot
+}
+
+func RestoreSnapshot(snapshot Snapshot) {
+	now := time.Now().UnixMilli()
+
+	for _, entry := range snapshot.Entries {
+	
+		if entry.ExpiresAt != -1 && entry.ExpiresAt <= now {
+			continue
+		}
+
+		obj := &Obj{
+			Value:     entry.Value,
+			Type:      entry.Type,
+			ExpiresAt: entry.ExpiresAt,
+		}
+
+		// Reinitialize eviction metadata.
+		if config.EVICTION_POLICY == config.LFU {
+			setLFUCounter(obj, config.LFU_INIT_VAL)
+			setLFULastDecay(obj, currentMinute())
+		}
+
+		Put(entry.Key, obj)
+	}
 }
