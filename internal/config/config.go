@@ -17,8 +17,9 @@ const(
 	NO_EVICTION EvictonPolicy=0
 	LRU EvictonPolicy=1
 	LFU EvictonPolicy=2
-	RDBPath = "./data/dump.rdb"
-    AOFPath = "./data/appendonly.aof"
+	RDB_PATH = "./data/dump.rdb"
+    AOF_PATH = "./data/appendonly.aof"
+	LOAD_RDB_ON_START=true
 )
 
 var EVICTION_POLICY=NO_EVICTION

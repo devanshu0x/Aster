@@ -12,7 +12,7 @@ import (
 func cmdSAVE() *resp.RESPValue {
 	snapshot := store.SnapshotStore()
 
-	if err := persistence.SaveRDB(snapshot, config.RDBPath); err != nil {
+	if err := persistence.SaveRDB(snapshot, config.RDB_PATH); err != nil {
 		log.Println(err)
 		return RESPError("Err failed to save snapshot")
 	}

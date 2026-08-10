@@ -1,11 +1,15 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
+	"os"
 
 	"github.com/devanshu0x/Aster/internal/config"
+	"github.com/devanshu0x/Aster/internal/persistence"
 	"github.com/devanshu0x/Aster/internal/server"
+	"github.com/devanshu0x/Aster/internal/store"
 )
 
 
@@ -15,9 +19,31 @@ func setupFlags(){
 	flag.Parse()
 }
 
+func loadPersistence() {
+	snapshot, err := persistence.LoadRDB(config.RDB_PATH)
+
+	if err != nil {
+		// No RDB on first startup is normal.
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("No RDB file found, starting with empty database")
+			return
+		}
+
+		log.Println("Failed to load RDB: ", err)
+	}
+
+	store.RestoreSnapshot(snapshot)
+
+	log.Printf("Loaded %d keys from RDB\n", len(snapshot.Entries))
+}
+
 func main(){
 	setupFlags()
 	log.Println("Aster is starting...")
+	if config.LOAD_RDB_ON_START{
+		log.Println("Attempting to load RDB snapshot")
+		loadPersistence()
+	}
 	err:=server.RunAsyncTCPServer()
 	log.Fatalln("Error closing server: ",err)
 }
