@@ -44,6 +44,16 @@ func main(){
 		log.Println("Attempting to load RDB snapshot")
 		loadPersistence()
 	}
-	err:=server.RunAsyncTCPServer()
+	var aof *persistence.AOF
+	if config.USE_AOF{
+		var err error
+		aof,err=persistence.OpenAOF(config.AOF_PATH)
+		if err!=nil{
+			log.Fatalln(err)
+		}
+
+		defer aof.Close()
+	}
+	err:=server.RunAsyncTCPServer(aof)
 	log.Fatalln("Error closing server: ",err)
 }

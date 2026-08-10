@@ -5,24 +5,28 @@ import (
 	"github.com/devanshu0x/Aster/internal/store"
 )
 
-func cmdDEL(argArr []*resp.RESPValue) *resp.RESPValue{
+func cmdDEL(argArr []*resp.RESPValue) (*resp.RESPValue,bool){
 	if len(argArr)==0{
-		return RESPError("Err invalid number of argument from 'del' command")
+		return RESPError("Err invalid number of argument from 'del' command"),false
 	}
 
 	count:=0;
 	for _,val:=range argArr{
 		key,ok:=val.Value.(string)
 		if !ok{
-			return RESPError("Err expected string as a key")
+			return RESPError("Err expected string as a key"),false
 		}
 		if store.Del(key){
 			count++
 		}
 	}
-
+	
+	mutated:=false
+	if count>0{
+		mutated=true
+	}
 	return &resp.RESPValue{
 		Type: resp.RESPInteger,
 		Value: count,
-	}
+	},mutated
 }

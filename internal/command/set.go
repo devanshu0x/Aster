@@ -8,19 +8,19 @@ import (
 	"github.com/devanshu0x/Aster/internal/store"
 )
 
-func cmdSET(argArr []*resp.RESPValue) *resp.RESPValue{
+func cmdSET(argArr []*resp.RESPValue) (*resp.RESPValue,bool){
 	if len(argArr)<=1{
-		return RESPError("Err wrong number of argument for 'set' command")
+		return RESPError("Err wrong number of argument for 'set' command"),false
 	}
 
 	key,ok:=argArr[0].Value.(string)
 	if !ok{
-		return RESPError("Err expected string as a key")
+		return RESPError("Err expected string as a key"),false
 	}
 
 	val,ok:=argArr[1].Value.(string)
 	if !ok{
-		return RESPError("Err expected string as a value")
+		return RESPError("Err expected string as a value"),false
 	}
 
 	exDurationMs:=int64(-1)
@@ -28,26 +28,26 @@ func cmdSET(argArr []*resp.RESPValue) *resp.RESPValue{
 	for i:=2;i<len(argArr);i++{
 		arg,ok:=argArr[i].Value.(string)
 		if !ok{
-			return RESPError("Err expected string as an argument")
+			return RESPError("Err expected string as an argument"),false
 		}
 		arg=strings.ToUpper(arg)
 		switch(arg){
 		case "EX":
 			i++
 			if i==len(argArr){
-				return RESPError("Err invalid syntax")
+				return RESPError("Err invalid syntax"),false
 			}
 			durationString,ok:=argArr[i].Value.(string)
 			if !ok{
-				return RESPError("Err expected string as arg value")
+				return RESPError("Err expected string as arg value"),false
 			}
 			exDurationSec,err:=strconv.ParseInt(durationString,10,64)
 			if err!=nil{
-				return RESPError("Err value is not integer or out of range")
+				return RESPError("Err value is not integer or out of range"),false
 			}
 			exDurationMs=exDurationSec*1000
 		default:
-			return RESPError("Err invalid syntax")	
+			return RESPError("Err invalid syntax"),false	
 		}
 
 	}
@@ -56,6 +56,6 @@ func cmdSET(argArr []*resp.RESPValue) *resp.RESPValue{
 	return &resp.RESPValue{
 			Type:resp.RESPSimpleString ,
 			Value: "OK",
-		}
+		},true
 	
 }

@@ -9,10 +9,10 @@ import (
 
 	"github.com/devanshu0x/Aster/internal/command"
 	"github.com/devanshu0x/Aster/internal/config"
+	"github.com/devanshu0x/Aster/internal/persistence"
 	"github.com/devanshu0x/Aster/internal/resp"
 	"github.com/devanshu0x/Aster/internal/store"
 )
-
 
 // Asynchronous TCP server (IO Multiplexing)
 
@@ -20,7 +20,7 @@ var con_clients int = 0
 var cronFrequency time.Duration= 1*time.Second
 var lastCronExecTime time.Time= time.Now()
 
-func RunAsyncTCPServer() error {
+func RunAsyncTCPServer(aof *persistence.AOF) error {
 	log.Printf("Starting TCP server on %s:%d\n", config.HOST, config.PORT)
 
 	clients := map[int]*Client{}
@@ -166,7 +166,12 @@ func RunAsyncTCPServer() error {
 						break
 					}
 
-					respVal := command.Dispatch(cmd)
+					respVal,is_mutated := command.Dispatch(cmd)
+					if is_mutated && aof!=nil{
+						if err:=aof.Append(cmd);err!=nil{
+							return err
+						}
+					}
 
 					encoding, err := resp.Encode(respVal)
 					if err != nil {

@@ -20,6 +20,7 @@ const(
 	RDB_PATH = "./data/dump.rdb"
     AOF_PATH = "./data/appendonly.aof"
 	LOAD_RDB_ON_START=true
+	USE_AOF=true
 )
 
 var EVICTION_POLICY=NO_EVICTION
