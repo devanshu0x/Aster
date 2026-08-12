@@ -52,8 +52,12 @@ func Put(k string, obj *Obj) {
 
 func Get(k string) *Obj {
 
-	if store.isRehashing() {
+	if store.isRehashing(){
 		store.rehashStep()
+	}
+
+	if store.isRehashing() {
+		
 		if obj := store.ht[0].retrieveObj(k); obj != nil {
 			touch(obj)
 			return obj
@@ -73,8 +77,11 @@ func Del(k string) bool {
 		store.startRehash(len(store.ht[0].buckets) / 2)
 	}
 
-	if store.isRehashing() {
+	if store.isRehashing(){
 		store.rehashStep()
+	}
+	if store.isRehashing() {
+		
 		return (store.ht[0].deleteEntry(k) || store.ht[1].deleteEntry(k))
 	} else {
 		return store.ht[0].deleteEntry(k)
@@ -84,8 +91,11 @@ func Del(k string) bool {
 func Expire(k string, expInMilli int64) bool {
 	now := time.Now().UnixMilli()
 	expTime := now + expInMilli
-	if store.isRehashing() {
+	if store.isRehashing(){
 		store.rehashStep()
+	}
+	if store.isRehashing() {
+		
 		obj := store.ht[0].findObj(k)
 		obj2 := store.ht[1].findObj(k)
 		if obj == nil && obj2 == nil {
@@ -111,7 +121,7 @@ func Expire(k string, expInMilli int64) bool {
 		return true
 
 	} else {
-		obj := store.ht[0].findObj(k)
+		obj := store.ht[0].retrieveObj(k)
 		if obj == nil {
 			return false
 		}
