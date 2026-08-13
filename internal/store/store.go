@@ -32,11 +32,17 @@ func Put(k string, obj *Obj) {
 		//derefrence errror when using store.ht[1]
 		if store.isRehashing(){
 			store.ht[0].deleteEntry(k)
+			if store.totalKeys()==config.MAX_KEYS{
+				evictSample()
+			}
 			store.ht[1].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
 		})
 		}else{
+			if store.totalKeys()==config.MAX_KEYS{
+				evictSample()
+			}
 			store.ht[0].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
@@ -44,6 +50,9 @@ func Put(k string, obj *Obj) {
 		}
 
 	} else {
+		if store.totalKeys()==config.MAX_KEYS{
+				evictSample()
+		}
 		store.ht[0].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,

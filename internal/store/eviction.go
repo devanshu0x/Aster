@@ -22,7 +22,7 @@ This is only an approximation of true LRU, but with a small sample size
 (e.g. 5-10 keys) it closely matches true LRU in practice while keeping
 normal GET and SET operations O(1).
 */
-func evictLRUSample() {
+func evictSample() {
 	sampleSize := config.SAMPLE_SIZE
 	var oldest *Entry
 	for sampleSize != 0 {
@@ -124,3 +124,5 @@ func LFUDecay(counter uint8, elapsed uint16) uint8 {
 
 	return counter - uint8(decays)
 }
+
+

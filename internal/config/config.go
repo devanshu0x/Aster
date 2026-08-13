@@ -21,6 +21,7 @@ const(
     AOF_PATH = "./data/appendonly.aof"
 	LOAD_RDB_ON_START=true
 	USE_AOF=true
+	MAX_OBJECTS= 100000
 )
 
 var EVICTION_POLICY=NO_EVICTION

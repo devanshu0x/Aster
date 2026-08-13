@@ -10,6 +10,15 @@ type Dict struct {
 	rehashIdx int
 }
 
+func (d *Dict) totalKeys() int{
+	total:=0
+	total+=d.ht[0].used
+	if d.isRehashing(){
+		total+=d.ht[1].used
+	}
+	return total
+}
+
 func (d *Dict) loadFactor() float64 {
 	return float64(d.ht[0].used) / float64(len(d.ht[0].buckets))
 }
