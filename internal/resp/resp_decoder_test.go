@@ -429,9 +429,56 @@ func TestDecode(t *testing.T) {
 			done: true,
 		},
 		{
-			name:    "unsupported type",
-			input:   "?abc",
-			wantErr: true,
+			name:  "inline ping command",
+			input: "PING\r\n",
+			output: &RESPValue{
+				Type: RESPArray,
+				Value: []*RESPValue{
+					{
+						Type:  RESPBulkString,
+						Value: "PING",
+					},
+				},
+			},
+			done: true,
+		},
+		{
+			name:  "inline ping command with message",
+			input: "PING hello\r\n",
+			output: &RESPValue{
+				Type: RESPArray,
+				Value: []*RESPValue{
+					{
+						Type:  RESPBulkString,
+						Value: "PING",
+					},
+					{
+						Type:  RESPBulkString,
+						Value: "hello",
+					},
+				},
+			},
+			done: true,
+		},
+		{
+			name:   "incomplete inline command",
+			input:  "PING\r",
+			output: nil,
+			done:   false,
+		},
+		{
+			name:  "unsupported type",
+			input: "?abc\r\n",
+			output: &RESPValue{
+				Type: RESPArray,
+				Value: []*RESPValue{
+					{
+						Type:  RESPBulkString,
+						Value: "?abc",
+					},
+				},
+			},
+			done: true,
 		},
 		{
 			name:   "empty input",
