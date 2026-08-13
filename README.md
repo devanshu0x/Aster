@@ -78,10 +78,10 @@ Everything is a command-line flag. `go run . -help` shows the same list from the
 | --- | --- | --- |
 | `-host` | `0.0.0.0` | IPv4 address to bind. |
 | `-port` | `6969` | TCP port to listen on. |
-| `-max-objects` | `10` | Number of keys at which Aster tries to evict one. |
+| `-max-objects` | `100000` | Number of keys at which Aster tries to evict one. |
 | `-eviction-policy` | `noeviction` | `noeviction`, `lru`, or `lfu`. |
-| `-sample-size` | `2` | Number of candidates considered for approximate eviction. |
-| `-hash-table-size` | `2` | Initial hash-table bucket count. |
+| `-sample-size` | `5` | Number of candidates considered for approximate eviction. |
+| `-hash-table-size` | `1024` | Initial hash-table bucket count. |
 | `-lfu-init-val` | `5` | Starting LFU counter value. |
 | `-lfu-log-factor` | `10` | How slowly the LFU counter grows. |
 | `-decay-time` | `1` | LFU counter decay interval, in minutes. |
