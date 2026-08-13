@@ -134,20 +134,21 @@ func Expire(k string, expInMilli int64) bool {
 	}
 }
 
-func Incr(k string) bool {
+func Incr(k string) (int,bool) {
 	obj:=Get(k)
 	if obj==nil{
 		obj=NewObject(1,-1,StringObject)
 		setEncoding(obj,IntEncoding)
-		return true
+		Put(k,obj)
+		return 1,true
 	}
 
 	if TryEncodeInt(obj){
 		v,_:=obj.Value.(int)
 		v++
 		obj.Value=strconv.Itoa(v)
-		return true
+		return v,true
 	}else{
-		return false
+		return 0,false
 	}
 }

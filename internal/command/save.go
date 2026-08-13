@@ -9,7 +9,10 @@ import (
 	"github.com/devanshu0x/Aster/internal/store"
 )
 
-func cmdSAVE() *resp.RESPValue {
+func cmdSAVE(argArr []*resp.RESPValue) *resp.RESPValue {
+	if len(argArr)!=0{
+		return RESPError("Err invalid number of argument for 'save' command")
+	}
 	snapshot := store.SnapshotStore()
 
 	if err := persistence.SaveRDB(snapshot, config.RDB_PATH); err != nil {

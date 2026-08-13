@@ -55,7 +55,9 @@ func Dispatch(v *resp.RESPValue)(respVal *resp.RESPValue,is_mutated bool){
 	case "DEL":
 		return cmdDEL(arr[1:])	
 	case "SAVE":
-		return cmdSAVE(),false		
+		return cmdSAVE(arr[1:]),false
+	case "INCR":
+		return cmdINCR(arr[1:])			
 	default:
 		return RESPError("Unregisted command"),false	
 	}
