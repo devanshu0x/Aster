@@ -126,6 +126,9 @@ go test ./...
 
 ## Benchmarking against Valkey
 
+See the [benchmark guide](benchmark/README.md) for prerequisites, configuration
+options, and the latest comparison results.
+
 The benchmark runner starts Aster with persistence disabled, then sends the
 same `valkey-benchmark` workload to Aster and a Valkey instance. Start Valkey
 locally on port 6379, then run:
