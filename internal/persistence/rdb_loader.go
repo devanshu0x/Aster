@@ -26,18 +26,6 @@ func readString(r io.Reader) (string, error) {
 	return string(data), nil
 }
 
-func readObjectType(t uint8) (store.ObjType, error) {
-	switch t {
-	case stringType:
-		return store.StringObject, nil
-	case hashType:
-		return store.HashObject, nil
-	case listType:
-		return store.ListObject, nil
-	default:
-		return "", fmt.Errorf("unknown RDB object type: %d", t)
-	}
-}
 
 func readEntry(r io.Reader) (store.SnapshotEntry, error) {
 	var entry store.SnapshotEntry
@@ -49,44 +37,23 @@ func readEntry(r io.Reader) (store.SnapshotEntry, error) {
 	}
 
 	entry.Key = key
-
-	// object type
-	var objType uint8
-
-	if err := binary.Read(r, binary.BigEndian, &objType); err != nil {
-		return entry, err
-	}
-
-	entry.Type, err = readObjectType(objType)
-	if err != nil {
-		return entry, err
-	}
-
+	
 	// expiration
 	if err := binary.Read(r, binary.BigEndian, &entry.ExpiresAt); err != nil {
 		return entry, err
 	}
 
 	// value
-	switch entry.Type {
-	case store.StringObject:
-		value, err := readString(r)
-		if err != nil {
-			return entry, err
-		}
 
-		entry.Value = value
-
-	default:
-		return entry, fmt.Errorf(
-			"deserialization not implemented for type: %s",
-			entry.Type,
-		)
+	value, err := readString(r)
+	if err != nil {
+		return entry, err
 	}
+
+	entry.Value = value
 
 	return entry, nil
 }
-
 
 func LoadRDB(path string) (store.Snapshot, error) {
 	f, err := os.Open(path)

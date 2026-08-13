@@ -3,7 +3,6 @@ package persistence
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 
@@ -25,24 +24,12 @@ func writeEntry(w io.Writer, entry store.SnapshotEntry) error {
 		return err
 	}
 
-	// object type
-	objType, err := objectType(entry.Type)
-	if err != nil {
-		return err
-	}
-
-	if err := binary.Write(w, binary.BigEndian, objType); err != nil {
-		return err
-	}
-
 	// expiration timestamp
 	if err := binary.Write(w, binary.BigEndian, entry.ExpiresAt); err != nil {
 		return err
 	}
 
-	// object value
-	switch entry.Type {
-	case store.StringObject:
+	
 		value, ok := entry.Value.(string)
 		if !ok {
 			return errors.New("string object contains non-string value")
@@ -50,9 +37,7 @@ func writeEntry(w io.Writer, entry store.SnapshotEntry) error {
 
 		return writeString(w, value)
 
-	default:
-		return fmt.Errorf("serialization not implemented for type: %s", entry.Type)
-	}
+	
 }
 
 func SaveRDB(snapshot store.Snapshot, path string) error {

@@ -12,13 +12,11 @@ func TestRDB(t *testing.T) {
 		Entries: []store.SnapshotEntry{
 			{
 				Key:       "foo",
-				Type:      store.StringObject,
 				Value:     "bar",
 				ExpiresAt: -1,
 			},
 			{
 				Key:       "hello",
-				Type:      store.StringObject,
 				Value:     "world",
 				ExpiresAt: 123456789,
 			},

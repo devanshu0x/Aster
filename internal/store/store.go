@@ -1,7 +1,9 @@
 package store
 
 import (
+	"strconv"
 	"time"
+
 	"github.com/devanshu0x/Aster/internal/config"
 )
 
@@ -129,5 +131,23 @@ func Expire(k string, expInMilli int64) bool {
 		obj.ExpiresAt = expTime
 
 		return true
+	}
+}
+
+func Incr(k string) bool {
+	obj:=Get(k)
+	if obj==nil{
+		obj=NewObject(1,-1,StringObject)
+		setEncoding(obj,IntEncoding)
+		return true
+	}
+
+	if TryEncodeInt(obj){
+		v,_:=obj.Value.(int)
+		v++
+		obj.Value=strconv.Itoa(v)
+		return true
+	}else{
+		return false
 	}
 }

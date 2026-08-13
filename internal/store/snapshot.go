@@ -8,7 +8,6 @@ import (
 
 type SnapshotEntry struct {
 	Key       string
-	Type      ObjType
 	Value     interface{}
 	ExpiresAt int64
 }
@@ -17,14 +16,7 @@ type Snapshot struct {
 	Entries []SnapshotEntry
 }
 
-func cloneValue(obj *Obj) interface{} {
-    switch obj.Type {
-    case StringObject:
-        return obj.Value
-    default:
-        return nil
-    }
-}
+
 
 func SnapshotStore() Snapshot {
     now := time.Now().UnixMilli()
@@ -60,8 +52,7 @@ func SnapshotStore() Snapshot {
 
                 snapshot.Entries = append(snapshot.Entries, SnapshotEntry{
                     Key:       entry.Key,
-                    Type:      obj.Type,
-                    Value:     cloneValue(obj),
+                    Value:     obj.Value,
                     ExpiresAt: obj.ExpiresAt,
                 })
             }
@@ -82,7 +73,6 @@ func RestoreSnapshot(snapshot Snapshot) {
 
 		obj := &Obj{
 			Value:     entry.Value,
-			Type:      entry.Type,
 			ExpiresAt: entry.ExpiresAt,
 		}
 

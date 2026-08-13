@@ -6,19 +6,43 @@ import (
 	"github.com/devanshu0x/Aster/internal/config"
 )
 
-type ObjType string
 
 const (
-	StringObject ObjType = "string"
-	HashObject   ObjType = "hash"
-	ListObject   ObjType = "list"
+	objectTypeMask uint32 = 0xF0000000
+	encodingMask   uint32 = 0x0F000000
 )
+
+const (
+	StringObject uint32 = 1
+	HashObject   uint32 = 2
+	ListObject   uint32 = 3
+)
+
+/*
+  Here I'm making some improvement, to reduce memory overhead
+  EvictData is 4 bytes, its first byte represents object type and encoding
+  type and next three bytes are used for eviction strategies.
+  in first byte the first 4 bits will represent the object type and next 4 bits
+  will represent encoding type.
+  If eviction strategy is LRU than then then the next three bytes represent LRU
+  Clock time and in case of LFU, first two byte represent last decay min and
+  last 1 byte represent approximate frequency count using morris counter(not the
+  orignal morris counter but a derived one which uses same probability logic)
+*/
 
 type Obj struct {
 	Value     interface{}
 	ExpiresAt int64
-	Type      ObjType
 	EvictData  uint32
+}
+
+func setObjectType(o *Obj, t uint32) {
+	o.EvictData &^= objectTypeMask
+	o.EvictData |= t << 28
+}
+
+func getObjectType(o *Obj) uint32 {
+	return (o.EvictData & objectTypeMask) >> 28
 }
 
 func touchLRU(o *Obj) {
@@ -60,7 +84,7 @@ func touch(o *Obj){
 	}
 }
 
-func NewObject(value interface{}, durationMs int64, objType ObjType) *Obj {
+func NewObject(value interface{}, durationMs int64, objType uint32) *Obj {
 	expiresAt := int64(-1)
 	if durationMs > 0 {
 		expiresAt = time.Now().UnixMilli() + durationMs
@@ -69,7 +93,18 @@ func NewObject(value interface{}, durationMs int64, objType ObjType) *Obj {
 	obj:=&Obj{
 		Value:     value,
 		ExpiresAt: expiresAt,
-		Type:      objType,
+	}
+
+	// for now we only support string objects
+	switch objType {
+	case StringObject:
+		setObjectType(obj, StringObject)
+
+	case HashObject:
+		setObjectType(obj, HashObject)
+
+	case ListObject:
+		setObjectType(obj, ListObject)
 	}
 
 	if config.EVICTION_POLICY == config.LFU {
