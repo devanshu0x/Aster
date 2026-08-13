@@ -1,39 +1,53 @@
 # Aster
 
-> A Redis-inspired, RESP2-compatible in-memory database written from scratch in Go.
+> A small Redis-compatible, in-memory database written in Go.
 
-Aster is a learning project for exploring the building blocks behind Redis-like systems: TCP sockets, non-blocking I/O, Linux `epoll`, the RESP wire protocol, command dispatch, expiration, and hash-table maintenance. It currently implements a focused subset of Redis commands rather than the complete Redis command surface.
+Aster started as a way to understand what sits underneath a Redis-like server. The goal was to build the interesting parts myself: RESP parsing, a TCP server built around `epoll`, expiry, incremental rehashing, eviction, and a little persistence. It is not trying to replace Redis; it is a compact project for learning how those pieces fit together.
 
-## What is implemented
+It currently stores strings and speaks RESP2, so you can point `redis-cli` at it for the commands listed below.
 
-- RESP2 encoder and streaming decoder, including pipelined commands
-- Linux `epoll`-based, non-blocking TCP event loop
-- In-memory string key-value store
-- Incremental hash-table rehashing as the store grows
-- Lazy expiration on reads plus periodic active expiration
-- Configurable approximate LRU and LFU eviction
+## What is here
+
+- A non-blocking TCP server built with Linux `epoll`
+- RESP2 encoding and streaming decoding, including pipelined commands
+- String keys with TTLs, lazy expiry, and periodic expiry cleanup
+- Incremental hash-table rehashing
+- Approximate LRU and LFU eviction
 - RDB-style snapshots and an append-only write log
-- RESP-compatible replies for the supported commands
 
-## Supported commands
+## Architecture
 
-| Command | Notes |
+```mermaid
+flowchart LR
+    client[RESP client / redis-cli] --> server["TCP server<br/>epoll event loop"]
+    server --> decoder[RESP decoder]
+    decoder --> commands[Command dispatcher]
+    commands --> store["In-memory store<br/>hash tables, TTLs, eviction"]
+    store --> encoder[RESP encoder]
+    encoder --> server
+
+    cron[Periodic expiry cleanup] --> store
+    startup[RDB load on startup] --> store
+    commands -->|SAVE| rdb[(RDB snapshot)]
+    commands -->|successful writes| aof[(AOF log)]
+```
+
+## Commands
+
+| Command | What it does |
 | --- | --- |
-| `PING [message]` | Returns `PONG`, or echoes a message. |
-| `SET key value [EX seconds]` | Stores a string; `EX` assigns a TTL in seconds. |
-| `GET key` | Returns the string value or a null bulk string. |
-| `DEL key [key ...]` | Deletes one or more keys and returns the number removed. |
-| `EXPIRE key seconds` | Sets a key's TTL and returns whether it was set. |
-| `TTL key` | Returns remaining TTL in seconds, `-1` without expiry, or `-2` when missing/expired. |
-| `INCR key` | Increments an integer string, creating it with value `1` when absent. |
-| `SAVE` | Writes an RDB snapshot to the configured path. |
+| `PING [message]` | Returns `PONG`, or echoes the message. |
+| `SET key value [EX seconds]` | Stores a string. `EX` sets a TTL in seconds. |
+| `GET key` | Reads a string, or returns a null bulk string. |
+| `DEL key [key ...]` | Deletes keys and returns how many were removed. |
+| `EXPIRE key seconds` | Sets a key TTL. |
+| `TTL key` | Returns seconds left, `-1` without an expiry, or `-2` when absent. |
+| `INCR key` | Increments an integer string; creates it at `1` when missing. |
+| `SAVE` | Writes the current data to the configured RDB file. |
 
-## Requirements
+## Running it
 
-- Go 1.26 or newer
-- Linux (the server uses `epoll` and Linux system calls)
-
-## Getting started
+You need Go 1.26+ and Linux—the server uses Linux system calls and `epoll`.
 
 ```bash
 git clone https://github.com/devanshu0x/Aster.git
@@ -41,43 +55,13 @@ cd Aster
 go run .
 ```
 
-The server listens on `0.0.0.0:6969` by default. For a local-only server:
+By default, Aster listens on `0.0.0.0:6969`. For a local-only server:
 
 ```bash
 go run . -host 127.0.0.1 -port 6969
 ```
 
-## Configuration
-
-All runtime configuration is available as command-line flags. Run `go run . -help` for the generated help text.
-
-| Flag | Default | Purpose |
-| --- | --- | --- |
-| `-host` | `0.0.0.0` | IPv4 bind address. |
-| `-port` | `6969` | TCP listen port. |
-| `-max-objects` | `10` | Key limit at which an eviction is attempted. Use `lru` or `lfu` for this to enforce a limit. |
-| `-eviction-policy` | `noeviction` | `noeviction`, `lru`, or `lfu`. |
-| `-sample-size` | `2` | Candidates sampled for an approximate eviction decision. |
-| `-hash-table-size` | `2` | Initial bucket count for the in-memory hash table. |
-| `-lfu-init-val` | `5` | Initial LFU frequency counter. |
-| `-lfu-log-factor` | `10` | LFU logarithmic increment factor. |
-| `-decay-time` | `1` | LFU counter decay interval, in minutes. |
-| `-rdb-path` | `./data/dump.rdb` | Snapshot file used by `SAVE` and startup loading. |
-| `-load-rdb-on-start` | `true` | Load the RDB snapshot during startup. |
-| `-aof-path` | `./data/appendonly.aof` | Append-only log file path. |
-| `-use-aof` | `true` | Append successful mutating commands to the AOF. |
-
-For example, to run with a 1,000-key approximate LRU cache and custom persistence paths:
-
-```bash
-go run . \
-  -max-objects 1000 \
-  -eviction-policy lru \
-  -rdb-path ./data/aster.rdb \
-  -aof-path ./data/aster.aof
-```
-
-Try it with a RESP-compatible client:
+Then try it with `redis-cli`:
 
 ```bash
 redis-cli -p 6969 PING
@@ -86,23 +70,53 @@ redis-cli -p 6969 GET greeting
 redis-cli -p 6969 TTL greeting
 ```
 
-## Project structure
+## Configuration
 
+Everything is a command-line flag. `go run . -help` shows the same list from the running binary.
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `-host` | `0.0.0.0` | IPv4 address to bind. |
+| `-port` | `6969` | TCP port to listen on. |
+| `-max-objects` | `10` | Number of keys at which Aster tries to evict one. |
+| `-eviction-policy` | `noeviction` | `noeviction`, `lru`, or `lfu`. |
+| `-sample-size` | `2` | Number of candidates considered for approximate eviction. |
+| `-hash-table-size` | `2` | Initial hash-table bucket count. |
+| `-lfu-init-val` | `5` | Starting LFU counter value. |
+| `-lfu-log-factor` | `10` | How slowly the LFU counter grows. |
+| `-decay-time` | `1` | LFU counter decay interval, in minutes. |
+| `-rdb-path` | `./data/dump.rdb` | File read at startup and written by `SAVE`. |
+| `-load-rdb-on-start` | `true` | Whether to load that snapshot at startup. |
+| `-aof-path` | `./data/appendonly.aof` | Append-only log location. |
+| `-use-aof` | `true` | Whether to append successful writes to the AOF. |
+
+For example, here is a local LRU cache with room for 1,000 keys:
+
+```bash
+go run . \
+  -host 127.0.0.1 \
+  -max-objects 1000 \
+  -eviction-policy lru
 ```
+
+## A few things to know
+
+- This is a learning project and is best used locally.
+- The AOF is written to, but not replayed on startup yet. If you want data back after a restart, run `SAVE` and keep the RDB file.
+- Only numeric IPv4 addresses are accepted for `-host` at the moment.
+- There is still plenty of production work left: graceful shutdown, authentication, replication, complete Redis command compatibility, and proper `EPOLLOUT` handling when a non-blocking write would block.
+
+## Layout
+
+```text
 internal/
-    command/        # Command parsing and implementations
-    config/         # Server and store configuration
-    resp/           # RESP2 encoder and streaming decoder
-    server/         # TCP server and epoll event loop
-    store/          # Dictionary, expiry, rehashing, and eviction hooks
+  command/      command parsing and implementations
+  config/       runtime configuration
+  persistence/  RDB and AOF code
+  resp/         RESP2 encoder and decoder
+  server/       TCP server and epoll loop
+  store/        dictionary, expiry, rehashing, and eviction
 ```
-
-## Current limitations
-
-- Aster is a learning project, not a drop-in production Redis replacement.
-- The AOF records successful writes, but it is not replayed during startup yet; use `SAVE` for restorable persistence.
-- The server currently accepts numeric IPv4 addresses, not hostnames.
-- Back-pressure after a non-blocking write reaches `EAGAIN`, graceful shutdown, authentication, replication, and comprehensive command compatibility are still future work.
 
 ## Development
 
