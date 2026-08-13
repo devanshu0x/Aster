@@ -123,3 +123,24 @@ internal/
 ```bash
 go test ./...
 ```
+
+## Benchmarking against Valkey
+
+The benchmark runner starts Aster with persistence disabled, then sends the
+same `valkey-benchmark` workload to Aster and a Valkey instance. Start Valkey
+locally on port 6379, then run:
+
+```bash
+./benchmark/run.sh
+```
+
+It writes timestamped output under `benchmark/results/`. The default workload
+is 100,000 requests each of RESP `PING`, inline `PING`, `SET`, and `GET`, with
+50 clients. Adjust it without editing the script:
+
+```bash
+REQUESTS=1000000 CLIENTS=100 PIPELINE=16 DATA_SIZE=128 ./benchmark/run.sh
+```
+
+Set `ASTER_PORT` or `VALKEY_PORT` for non-default ports. If Aster is already
+running, set `START_ASTER=0`; it must be started with comparable settings.
