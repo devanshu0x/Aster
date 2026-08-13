@@ -137,14 +137,18 @@ func Expire(k string, expInMilli int64) bool {
 func Incr(k string) (int,bool) {
 	obj:=Get(k)
 	if obj==nil{
-		obj=NewObject(1,-1,StringObject)
+		obj=NewObject("1",-1,StringObject)
 		setEncoding(obj,IntEncoding)
 		Put(k,obj)
 		return 1,true
 	}
 
 	if TryEncodeInt(obj){
-		v,_:=obj.Value.(int)
+		val,ok:=obj.Value.(string)
+		if !ok{
+			return 0,false
+		}
+		v,_:=strconv.Atoi(val)
 		v++
 		obj.Value=strconv.Itoa(v)
 		return v,true
