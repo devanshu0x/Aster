@@ -127,6 +127,7 @@ func RunAsyncTCPServer(aof *persistence.AOF) error {
 					if err := syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_ADD, fd, &clientSocketEvent); err != nil {
 						return err
 					}
+					log.Printf("Client connected (fd=%d, %d clients connected)", fd, con_clients)
 				}
 
 			} else {

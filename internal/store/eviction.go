@@ -1,6 +1,7 @@
 package store
 
 import (
+	"log"
 	"math/rand"
 	"time"
 
@@ -23,6 +24,10 @@ This is only an approximation of true LRU, but with a small sample size
 normal GET and SET operations O(1).
 */
 func evictSample() {
+	if config.EVICTION_POLICY == config.NO_EVICTION {
+		return
+	}
+
 	sampleSize := config.SAMPLE_SIZE
 	var oldest *Entry
 	for sampleSize != 0 {
@@ -62,10 +67,25 @@ func evictSample() {
 		}
 	}
 	if oldest == nil {
+		log.Printf("Eviction skipped: no candidate found for %s policy", evictionPolicyName())
 		return
 	}
-	Del(oldest.Key)
 
+	if Del(oldest.Key) {
+		log.Printf("Evicted key %q using %s policy (%d/%d keys remaining)", oldest.Key, evictionPolicyName(), store.totalKeys(), config.MAX_OBJECTS)
+	}
+
+}
+
+func evictionPolicyName() string {
+	switch config.EVICTION_POLICY {
+	case config.LRU:
+		return "LRU"
+	case config.LFU:
+		return "LFU"
+	default:
+		return "noeviction"
+	}
 }
 
 // IN LFU, EvictData-> 8 bit unused+ 16 bit last decay min+ 8 bit counter in
@@ -124,5 +144,4 @@ func LFUDecay(counter uint8, elapsed uint16) uint8 {
 
 	return counter - uint8(decays)
 }
-
 

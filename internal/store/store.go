@@ -11,6 +11,13 @@ var store *Dict
 var LRUClock uint32
 
 func init() {
+	Initialize()
+}
+
+// Initialize creates an empty store using the current configuration. It is
+// called again at startup after command-line flags have been parsed so the
+// initial hash-table size flag takes effect.
+func Initialize() {
 	store = &Dict{
 		ht: [2]*HashTable{
 			NewHashTable(config.HASH_TABLE_SIZE),
@@ -32,26 +39,27 @@ func Put(k string, obj *Obj) {
 		//derefrence errror when using store.ht[1]
 		if store.isRehashing(){
 			store.ht[0].deleteEntry(k)
-			if store.totalKeys()==config.MAX_KEYS{
+			if store.totalKeys()==config.MAX_OBJECTS{
 				evictSample()
 			}
 			store.ht[1].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
-		})
+			})
 		}else{
-			if store.totalKeys()==config.MAX_KEYS{
+			if store.totalKeys()==config.MAX_OBJECTS{
 				evictSample()
 			}
 			store.ht[0].insertEntry(&Entry{
 			Key: k,
 			Obj: obj,
-		})
+			})
 		}
 
 	} else {
-		if store.totalKeys()==config.MAX_KEYS{
-				evictSample()
+		if store.totalKeys()==config.MAX_OBJECTS{
+
+			evictSample()
 		}
 		store.ht[0].insertEntry(&Entry{
 			Key: k,
@@ -106,7 +114,7 @@ func Expire(k string, expInMilli int64) bool {
 		store.rehashStep()
 	}
 	if store.isRehashing() {
-		
+
 		obj := store.ht[0].findObj(k)
 		obj2 := store.ht[1].findObj(k)
 		if obj == nil && obj2 == nil {

@@ -11,6 +11,8 @@ Aster is a learning project for exploring the building blocks behind Redis-like 
 - In-memory string key-value store
 - Incremental hash-table rehashing as the store grows
 - Lazy expiration on reads plus periodic active expiration
+- Configurable approximate LRU and LFU eviction
+- RDB-style snapshots and an append-only write log
 - RESP-compatible replies for the supported commands
 
 ## Supported commands
@@ -23,6 +25,8 @@ Aster is a learning project for exploring the building blocks behind Redis-like 
 | `DEL key [key ...]` | Deletes one or more keys and returns the number removed. |
 | `EXPIRE key seconds` | Sets a key's TTL and returns whether it was set. |
 | `TTL key` | Returns remaining TTL in seconds, `-1` without expiry, or `-2` when missing/expired. |
+| `INCR key` | Increments an integer string, creating it with value `1` when absent. |
+| `SAVE` | Writes an RDB snapshot to the configured path. |
 
 ## Requirements
 
@@ -37,10 +41,40 @@ cd Aster
 go run .
 ```
 
-The server listens on `0.0.0.0:6969` by default. Configure it with flags:
+The server listens on `0.0.0.0:6969` by default. For a local-only server:
 
 ```bash
 go run . -host 127.0.0.1 -port 6969
+```
+
+## Configuration
+
+All runtime configuration is available as command-line flags. Run `go run . -help` for the generated help text.
+
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `-host` | `0.0.0.0` | IPv4 bind address. |
+| `-port` | `6969` | TCP listen port. |
+| `-max-objects` | `10` | Key limit at which an eviction is attempted. Use `lru` or `lfu` for this to enforce a limit. |
+| `-eviction-policy` | `noeviction` | `noeviction`, `lru`, or `lfu`. |
+| `-sample-size` | `2` | Candidates sampled for an approximate eviction decision. |
+| `-hash-table-size` | `2` | Initial bucket count for the in-memory hash table. |
+| `-lfu-init-val` | `5` | Initial LFU frequency counter. |
+| `-lfu-log-factor` | `10` | LFU logarithmic increment factor. |
+| `-decay-time` | `1` | LFU counter decay interval, in minutes. |
+| `-rdb-path` | `./data/dump.rdb` | Snapshot file used by `SAVE` and startup loading. |
+| `-load-rdb-on-start` | `true` | Load the RDB snapshot during startup. |
+| `-aof-path` | `./data/appendonly.aof` | Append-only log file path. |
+| `-use-aof` | `true` | Append successful mutating commands to the AOF. |
+
+For example, to run with a 1,000-key approximate LRU cache and custom persistence paths:
+
+```bash
+go run . \
+  -max-objects 1000 \
+  -eviction-policy lru \
+  -rdb-path ./data/aster.rdb \
+  -aof-path ./data/aster.aof
 ```
 
 Try it with a RESP-compatible client:
@@ -63,52 +97,15 @@ internal/
     store/          # Dictionary, expiry, rehashing, and eviction hooks
 ```
 
-## Roadmap
+## Current limitations
 
-The next items are ordered to build a dependable core before adding distributed features.
-
-### 1. Harden the server and protocol
-
-- [ ] Add unit and integration tests for every command, expiry boundary, rehashing, pipelining, and partial writes.
-- [ ] Add fuzz tests and request-size/depth limits to the RESP decoder.
-- [ ] Handle `EPOLLOUT` so buffered responses cannot stall after an `EAGAIN` write.
-- [ ] Standardize Redis-style error messages and command arity/type validation.
-- [ ] Add graceful shutdown, connection limits, structured logging, and basic metrics.
-
-### 2. Complete the string and keyspace foundation
-
-- [ ] `EXISTS`, `TYPE`, `DBSIZE`, `FLUSHDB`, `MGET`, `MSET`, `INCR`/`DECR`, and `APPEND`.
-- [ ] Redis-compatible `SET` options: `NX`, `XX`, `PX`, `KEEPTTL`, and `GET`.
-- [ ] `PTTL`, `PEXPIRE`, `PERSIST`, `EXPIREAT`, and `PEXPIREAT`.
-- [ ] Cursor-based `SCAN` with `MATCH` and `COUNT` rather than a blocking `KEYS` implementation.
-
-### 3. Add data types and their core commands
-
-- [ ] Hashes: `HSET`, `HGET`, `HDEL`, `HGETALL`.
-- [ ] Lists: `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LRANGE`.
-- [ ] Sets: `SADD`, `SREM`, `SMEMBERS`, `SISMEMBER`.
-- [ ] Sorted sets: `ZADD`, `ZRANGE`, `ZRANK`.
-
-### 4. Add server semantics
-
-- [ ] Logical databases and `SELECT`.
-- [ ] Transactions: `MULTI`, `EXEC`, `DISCARD`, `WATCH`.
-- [ ] Pub/Sub with per-client subscription state and back-pressure handling.
-- [ ] Authentication and ACLs before exposing the server beyond a trusted network.
-
-### 5. Make data durable and scalable
-
-- [ ] Configurable memory limits and an actual eviction policy (LRU/LFU/TTL).
-- [ ] Append-only file (AOF), rewrite/compaction, and crash recovery.
-- [ ] RDB-style snapshots and background save.
-- [ ] Leader/replica replication, replication offsets, and resynchronization.
+- Aster is a learning project, not a drop-in production Redis replacement.
+- The AOF records successful writes, but it is not replayed during startup yet; use `SAVE` for restorable persistence.
+- The server currently accepts numeric IPv4 addresses, not hostnames.
+- Back-pressure after a non-blocking write reaches `EAGAIN`, graceful shutdown, authentication, replication, and comprehensive command compatibility are still future work.
 
 ## Development
 
 ```bash
 go test ./...
 ```
-
-## Scope
-
-Aster is currently intended for learning and local experimentation. It should not be used as a drop-in production Redis replacement: persistence, authentication, replication, comprehensive command compatibility, and production hardening are still roadmap work.

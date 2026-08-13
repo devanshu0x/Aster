@@ -16,9 +16,10 @@ func cmdSAVE(argArr []*resp.RESPValue) *resp.RESPValue {
 	snapshot := store.SnapshotStore()
 
 	if err := persistence.SaveRDB(snapshot, config.RDB_PATH); err != nil {
-		log.Println(err)
+		log.Printf("Failed to save RDB snapshot to %q: %v", config.RDB_PATH, err)
 		return RESPError("Err failed to save snapshot")
 	}
+	log.Printf("Saved RDB snapshot with %d keys to %q", len(snapshot.Entries), config.RDB_PATH)
 	return &resp.RESPValue{
 		Type:  resp.RESPSimpleString,
 		Value: "OK",
